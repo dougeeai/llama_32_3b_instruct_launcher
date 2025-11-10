@@ -1,0 +1,62 @@
+# environment.yml - Conda environment for Llama 3.2 3B Transformers Launcher
+# Usage: conda env create -f environment.yml
+# After install:
+#   pip install torch --index-url https://download.pytorch.org/whl/cu130
+#   pip install flash-attn --no-build-isolation (for Flash Attention 2)
+
+name: llama_32_3b_instruct_launcher
+channels:
+  - conda-forge
+  - defaults
+
+dependencies:
+  # Python 3.13 (supported by PyTorch 2.9.0 according to the docs)
+  - python=3.13
+  
+  # Core dependencies
+  - pip
+  - setuptools
+  - wheel
+  
+  # System monitoring
+  - psutil
+  
+  # Optional but useful
+  - ipykernel  # For VSCode Jupyter support with # %% cells
+  - ipywidgets
+  - jupyter
+  
+  # Pip dependencies
+  - pip:
+    # Transformers ecosystem
+    - transformers
+    - accelerate
+    - safetensors
+    - tokenizers
+    
+    # Quantization support (optional but recommended)
+    - bitsandbytes  # For 8-bit and 4-bit quantization
+    
+    # GPU monitoring
+    - nvidia-ml-py
+    
+    # For model downloads
+    - huggingface-hub
+    
+    # Performance optimizations (optional)
+    - optimum  # HuggingFace optimization library
+    - xformers  # Memory-efficient transformers (alternative to flash-attn)
+    
+    # Utilities
+    - tqdm  # Progress bars
+    - rich  # Rich terminal output
+    - sentencepiece  # Some tokenizers need this
+    - protobuf  # Required by some models
+    
+    # Optional: Evaluation and metrics
+    - evaluate  # HuggingFace evaluation library
+    - datasets  # For working with datasets
+
+# After install:
+#   pip install torch --index-url https://download.pytorch.org/whl/cu130
+#   pip install flash-attn --no-build-isolation (for Flash Attention 2)
