@@ -1,30 +1,23 @@
 # %% [0.0] Launcher Script Info
-r"""
-Llama 3.2 3B Instruct Transformers Launcher
-Filename: llama_32_3b_instruct_launcher.py
-Description: Optimized launcher for Llama-3.2-3B-Instruct safetensors models
-Author: dougeeai
-Created: 2025-11-09
-Last Updated: 2025-11-09
-Optimized for: Python 3.13 + CUDA 13.0 + Transformers
-"""
+# Script metadata and documentation for version tracking
+# Llama 3.2 3B Instruct Transformers Launcher
+# Description: Optimized launcher for Llama-3.2-3B-Instruct safetensors models
+# Author: dougeeai
+# Created: 2025-11-09
+# Last Updated: 2025-11-11
+# Optimized for: Python 3.13 + CUDA 13.0 + Transformers
 
 # %% [0.1] Model Card & Summary
-"""
-MODEL: Llama-3.2-3B-Instruct
-Architecture: Llama 3.2 (3.21B parameters)
-Format: Safetensors (native HuggingFace format)
-File Size: ~6.4GB (full precision)
-Context: 128K max
-Best For: Instruction following, chat, code assistance
-GPU Memory Requirements:
-  - FP16: ~6-7GB VRAM
-  - 8-bit: ~3-4GB VRAM  
-  - 4-bit: ~2-3GB VRAM
-Recommended: RTX 3090/4090 or better for full context
-"""
+# Quick reference for model capabilities and requirements
+# MODEL: Llama-3.2-3B-Instruct
+# Architecture: Llama 3.2 (3.21B parameters)
+# Format: Safetensors (native HuggingFace format)
+# Context: 128K max
+# Best For: Instruction following, chat, code assistance
+# GPU Memory: Varies by precision (FP16: ~6-7GB, 8-bit: ~3-4GB, 4-bit: ~2-3GB)
 
 # %% [1.0] Core Imports
+# Essential Python libraries required for Transformers operation
 import os
 import sys
 import json
@@ -53,6 +46,7 @@ from transformers import (
 )
 
 # %% [1.1] Utility Imports
+# Supporting libraries for hardware monitoring and performance metrics
 import time
 import psutil
 import platform
@@ -83,14 +77,71 @@ except ImportError:
     FLASH_ATTN_AVAILABLE = False
     print("INFO: Flash Attention not available (optional performance enhancement)")
 
-# %% [2.0] User Configuration - All Settings
-"""
-USER CONFIGURABLE SECTION
-Modify these settings to customize model behavior
-"""
+# %% [2.0] Base Directory Configuration
+# Set base AI directory - all paths will be relative to this location
 
-# Model Configuration
-MODEL_PATH = r"E:\ai\models\llama_32_3b_instruct" #Update with your local location
+# Set your base directory (change this for your system)
+BASE_DIR = r"E:\ai"  # <-- CHANGE THIS to your AI folder location
+
+# Directory structure (automatically created from BASE_DIR)
+MODELS_DIR = os.path.join(BASE_DIR, "models")
+HF_DOWNLOADS_DIR = os.path.join(MODELS_DIR, "huggingface_downloads")  # For HF downloads
+HF_CACHE_DIR = os.path.join(HF_DOWNLOADS_DIR, "cache")  # HF cache
+
+# Create directories if they don't exist
+for dir_path in [MODELS_DIR, HF_DOWNLOADS_DIR, HF_CACHE_DIR]:
+    Path(dir_path).mkdir(parents=True, exist_ok=True)
+
+# %% [2.1] Model Source Configuration
+# Configure where to load the model from - local folder or HuggingFace download
+
+# Choose model source: "local" or "huggingface"
+MODEL_SOURCE = "local"  # Options: "local" or "huggingface"
+
+# Model identification
+MODEL_NAME = "llama_32_3b_instruct"  # Folder name for this model
+
+# Local model configuration (for manually downloaded models)
+# Local models go directly in: BASE_DIR/models/MODEL_NAME/
+LOCAL_MODEL_PATH = os.path.join(MODELS_DIR, MODEL_NAME)
+
+# HuggingFace configuration
+HF_REPO_ID = "meta-llama/Llama-3.2-3B-Instruct"
+# HuggingFace models will be saved to: models/huggingface_downloads/MODEL_NAME/
+HF_MODEL_DIR = os.path.join(HF_DOWNLOADS_DIR, MODEL_NAME)
+
+# Resolve actual model path based on source
+if MODEL_SOURCE == "huggingface":
+    try:
+        from huggingface_hub import snapshot_download
+        print(f"Downloading model from HuggingFace: {HF_REPO_ID}")
+        print(f"Download location: {HF_MODEL_DIR}")
+        print(f"Cache location: {HF_CACHE_DIR}")
+        
+        MODEL_PATH = snapshot_download(
+            repo_id=HF_REPO_ID,
+            cache_dir=HF_CACHE_DIR,
+            local_dir=HF_MODEL_DIR,
+            local_dir_use_symlinks=False
+        )
+        print(f"Model downloaded to: {MODEL_PATH}")
+    except ImportError:
+        print("ERROR: huggingface-hub not installed. Run: pip install huggingface-hub")
+        print("Falling back to local path...")
+        MODEL_PATH = LOCAL_MODEL_PATH
+    except Exception as e:
+        print(f"ERROR downloading from HuggingFace: {e}")
+        print("Falling back to local path...")
+        MODEL_PATH = LOCAL_MODEL_PATH
+else:
+    MODEL_PATH = LOCAL_MODEL_PATH
+    if not Path(MODEL_PATH).exists():
+        print(f"WARNING: Local model not found at: {MODEL_PATH}")
+        print(f"Expected location: {LOCAL_MODEL_PATH}")
+        print(f"To download from HuggingFace, set MODEL_SOURCE = 'huggingface'")
+
+# %% [2.2] User Configuration - All Settings
+# Central location for all user-modifiable model and generation settings
 
 # Precision Configuration (Choose one)
 # Options: "fp16" (full precision), "8bit", "4bit"
@@ -169,7 +220,9 @@ GENERATION_PRESETS = {
 # Select a preset (None = use manual settings above)
 USE_PRESET = None  # Options: None, "precise", "balanced", "creative", "deterministic"
 
-# %% [2.1] Model Configuration Dataclass
+# %% [2.3] Model Configuration Dataclass
+# Structured container for passing configuration to model loader
+
 @dataclass
 class ModelConfig:
     """Configuration container - populated from user settings above"""
@@ -227,34 +280,9 @@ class ModelConfig:
             self.load_in_8bit = False
             self.load_in_4bit = False
 
-# %% [2.2] Model Paths Validation
-# Verify model exists
-if not Path(MODEL_PATH).exists():
-    print(f"ERROR: Model not found at: {MODEL_PATH}")
-    sys.exit(1)
-
-# Check for required files
-required_files = ["config.json", "tokenizer.json", "model.safetensors.index.json"]
-for file in required_files:
-    if not (Path(MODEL_PATH) / file).exists():
-        print(f"WARNING: {file} not found in model directory")
-
-# %% [2.3] Model Paths - HF Download (Optional)
-"""
-# Uncomment to download from HuggingFace instead
-from huggingface_hub import snapshot_download
-
-HF_REPO = "meta-llama/Llama-3.2-3B-Instruct"
-
-MODEL_PATH = snapshot_download(
-    repo_id=HF_REPO,
-    cache_dir="E:/ai/models/cache",
-    local_dir="E:/ai/models/llama_32_3b_instruct",
-    local_dir_use_symlinks=False
-)
-"""
-
 # %% [3.0] Hardware Auto-Detection
+# Automatically determine optimal settings based on available hardware
+
 def get_optimal_settings() -> Dict[str, Any]:
     """Auto-configure based on available hardware"""
     settings = {}
@@ -296,6 +324,8 @@ def get_optimal_settings() -> Dict[str, Any]:
     return settings
 
 # %% [3.1] Hardware Detection
+# Gather detailed hardware information for optimization decisions
+
 def detect_hardware() -> Dict[str, Any]:
     """Detect available hardware capabilities"""
     info = {
@@ -332,6 +362,8 @@ def detect_hardware() -> Dict[str, Any]:
     return info
 
 # %% [3.2] Environment Validation
+# Verify Python version and required packages before proceeding
+
 def validate_environment() -> bool:
     """Validate Python and package environment"""
     valid = True
@@ -376,6 +408,8 @@ def validate_environment() -> bool:
     return valid
 
 # %% [4.0] Model Loader
+# Class to handle Transformers model loading with optimal settings
+
 class TransformersModelLoader:
     """Transformers model loader with quantization support"""
     
@@ -491,6 +525,8 @@ class TransformersModelLoader:
         return self.model, self.tokenizer
 
 # %% [4.1] Model Validation
+# Verify model files exist and are valid before attempting to load
+
 def validate_model_files(path: str) -> bool:
     """Validate model files exist and are valid"""
     path = Path(path)
@@ -527,6 +563,8 @@ def validate_model_files(path: str) -> bool:
     return True
 
 # %% [5.0] Model Initialization
+# Create and configure model instance with optional preset support
+
 def initialize_model(config: Optional[ModelConfig] = None) -> tuple:
     """Initialize model and tokenizer with config"""
     
@@ -550,6 +588,8 @@ def initialize_model(config: Optional[ModelConfig] = None) -> tuple:
     return loader.load()
 
 # %% [6.0] Inference Test
+# Quick test to verify model works and measure performance
+
 def test_inference(model, tokenizer, prompt: str = "Hello! How are you?") -> str:
     """Quick test to verify model works"""
     print("\n--- Running inference test ---")
@@ -590,6 +630,8 @@ def test_inference(model, tokenizer, prompt: str = "Hello! How are you?") -> str
     return result
 
 # %% [6.1] Terminal Chat Interface
+# Interactive chat loop with conversation history and streaming responses
+
 def chat_loop(model, tokenizer, config: ModelConfig):
     """Simple terminal chat interface with conversation history"""
     print("\n--- Chat Interface ---")
@@ -692,7 +734,8 @@ def chat_loop(model, tokenizer, config: ModelConfig):
                 torch.cuda.empty_cache()
 
 # %% [7.0] Optional Features
-# Advanced generation with stopping criteria
+# Advanced generation capabilities and monitoring utilities
+
 class KeywordStoppingCriteria(StoppingCriteria):
     """Stop generation when specific keywords are encountered"""
     def __init__(self, keywords, tokenizer):
@@ -740,6 +783,8 @@ def print_memory_usage():
     print(f"RAM: {ram_used:.2f}GB used ({ram_percent:.1f}%)")
 
 # %% [8.0] Main Entry Point
+# Orchestrate the entire launch sequence from validation to chat interface
+
 def main():
     """Main execution function"""
     
