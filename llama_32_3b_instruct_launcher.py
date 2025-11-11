@@ -595,8 +595,21 @@ def test_inference(model, tokenizer, prompt: str = "Hello! How are you?") -> str
     print("\n--- Running inference test ---")
     print(f"Prompt: {prompt}")
     
-    # Prepare input
-    inputs = tokenizer(prompt, return_tensors="pt", padding=True)
+    # Prepare messages with proper chat template
+    messages = [
+        {"role": "system", "content": "You are a helpful assistant."},
+        {"role": "user", "content": prompt}
+    ]
+    
+    # Apply chat template
+    chat_text = tokenizer.apply_chat_template(
+        messages,
+        tokenize=False,
+        add_generation_prompt=True
+    )
+    
+    # Tokenize
+    inputs = tokenizer(chat_text, return_tensors="pt", padding=True, truncation=True)
     if torch.cuda.is_available():
         inputs = {k: v.to('cuda') for k, v in inputs.items()}
     
@@ -616,7 +629,7 @@ def test_inference(model, tokenizer, prompt: str = "Hello! How are you?") -> str
     
     inference_time = time.time() - start_time
     
-    # Decode
+    # Decode only the generated portion (exclude input)
     generated = outputs[0][inputs['input_ids'].shape[1]:]
     result = tokenizer.decode(generated, skip_special_tokens=True)
     
